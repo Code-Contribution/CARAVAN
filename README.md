@@ -108,3 +108,5 @@ Caravan includes:
 Music:
 
 * Lazy Day - Tired - Music by Geoff Harvey from Pixabay
+
+Holotape Image by Goji! He put work into the art cover thumbnail for the Caravan Game and it's awesome!
