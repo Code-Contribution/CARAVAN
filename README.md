@@ -16,3 +16,18 @@ Memory-stability test for the Wand Company Pip-Boy 3000 (firmware 1.1.6).
 - Results offers `Rematch`, `Challenge New Opponent`, and `Back`; Rematch keeps the same opponent while Challenge New Opponent performs an in-place resident match reset with a different opponent.
 
 Music asset: "Lazy Day - Tired" (16 kHz mono IMA ADPCM, 1024-byte blocks).
+
+## Installation / PC Testing Note
+
+Caravan is a modular holotape. `APP.JS` cannot run by itself.
+
+A complete install must include every file listed in `metadata.json`, especially
+the runtime modules installed under `HOLO/CARAVAN/`, including
+`CARAVAN_MENU_INTERFACE.MIN.JS`, `CARAVAN_GAME.MIN.JS`,
+`CARAVAN_GAME_ENGINE.MIN.JS`, `CARAVAN_DRAW_SCREEN.MIN.JS`, and the remaining
+audio, graphics, tutorial, volume, and result assets.
+
+Uploading or running only `APP.JS` from a PC/editor can start Caravan and then
+fail with `NO_FILE` when it tries to load the first missing module. Use the
+complete metadata-driven package for normal testing.
+
