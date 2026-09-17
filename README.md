@@ -21,7 +21,6 @@ A playable recreation of **Caravan from Fallout: New Vegas** for **The Wand Comp
 * Animated bottle-cap win/loss results.
 * Configurable game sound effects and background music.
 * Persistent audio volume settings.
-* Low-memory lifecycle logging.
 
 ## Resident Runtime Architecture
 
