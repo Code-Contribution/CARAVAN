@@ -39,9 +39,21 @@
         faceCursor = 0,
         faceBase = -1,
         message = "YOUR TURN",
-        renderState = 0;
+        renderState = 0,
+        gameNumber = 0;
 
-    // --- Render state ---
+    // --- Diagnostics and render state ---
+    function logEvent(eventName) {
+        try {
+            if (Pip.log) {
+                const memoryState = process.memory();
+                Pip.log("CV G" + gameNumber + " " + eventName + " F" + memoryState.free + " T" + memoryState
+                    .total, "CARAVAN.LOG")
+            }
+        } catch (error) {
+        }
+    }
+
     function createRenderState() {
         return [api[2], playerHand, playerCaravans, cpuCaravans, handIndex, targetIndex, cpuTurn,
             actionMenuOpen, actionSelection, faceMode, faceBoard, faceLane, faceBase, 0, message,
@@ -138,12 +150,15 @@
         message = 0;
         playerDeck = cpuDeck = playerHand = cpuHand = playerCaravans = cpuCaravans = playerDirection = cpuDirection = 0;
         process.memory(true);
+        logEvent("DATAFREE")
     }
 
     function returnResult() {
         const outcome = currentResult() || "DRAW";
         finishTimer = 0;
+        logEvent("RESULT " + outcome);
         if (audio) audio[2]();
+        logEvent("AUDIOFREE");
         releaseGameplayModules();
         if (api[3]) api[3](outcome)
     }
@@ -525,6 +540,7 @@
         if (finishTimer) clearTimeout(finishTimer);
         cpuTimer = finishTimer = 0;
         ready = 0;
+        logEvent("REMATCH");
         process.memory(true);
         E.defrag();
         playerDeck = engine[9](engine[8](0));
@@ -545,9 +561,12 @@
         h.flip();
         Pip.lastFlip = getTime();
         process.memory(true);
+        gameNumber++;
         if (audio) audio[0]();
+        logEvent("AUDIOACTIVE");
         ready = 1;
         attachInput();
+        logEvent("READY")
     }
 
     function loadModule(fileName, moduleArguments) {
@@ -599,10 +618,14 @@
         Pip.lastFlip = getTime();
         process.memory(true);
         E.defrag();
+        gameNumber++;
         audio = loadModule("CARAVAN_GAME_AUDIO.MIN.JS", [fs, basePath]);
+        logEvent("AUDIOCORE");
         if (audio) audio[0]();
+        logEvent("AUDIOACTIVE");
         ready = 1;
         attachInput();
+        logEvent("READY")
     }, 1);
     return [removeGame, restartGame]
 })

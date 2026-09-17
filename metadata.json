@@ -3,7 +3,7 @@
   "name": "Caravan",
   "author": "@LlamaYeYe",
   "version": "1.0.0",
-  "description": "Caravan resident-runtime memory test: Engine, Renderer, and Game Audio stay loaded across rematches while only match data is rebuilt. Includes low-memory lifecycle logging.",
+  "description": "Caravan resident-runtime build: Engine, Renderer, and Game Audio stay loaded across rematches while only match data is rebuilt.",
   "previews": [],
   "type": "game",
   "readme": "README.md",
