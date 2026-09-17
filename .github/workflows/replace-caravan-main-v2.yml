@@ -1,0 +1,111 @@
+name: Replace Caravan main from package v2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/replace-caravan-main-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  replace-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply uploaded Caravan package
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, re, shutil
+
+          def blob_sha(path):
+              data = Path(path).read_bytes()
+              return hashlib.sha1(("blob %d\0" % len(data)).encode() + data).hexdigest()
+
+          if blob_sha("CARAVAN_GAME.JS") != "7ca8a7c05f2ae2bb2e868d209ca93cb5327a5f03":
+              raise SystemExit("Unexpected CARAVAN_GAME.JS baseline")
+          if blob_sha("assets/CARAVAN_GAME.MIN.JS") != "653b7115754e2bb54d84884d928b0955d9041fa4":
+              raise SystemExit("Unexpected CARAVAN_GAME.MIN.JS baseline")
+
+          dev = Path("LOGGING_SYSTEM_DEV_ONLY")
+          dev.mkdir(exist_ok=True)
+          shutil.copyfile("CARAVAN_GAME.JS", dev / "CARAVAN_GAME_LOGGING.JS")
+          shutil.copyfile("assets/CARAVAN_GAME.MIN.JS", dev / "CARAVAN_GAME_LOGGING.MIN.JS")
+
+          source = Path("CARAVAN_GAME.JS").read_text()
+          source = source.replace('        renderState = 0,\n        gameNumber = 0;', '        renderState = 0;', 1)
+          source, count = re.subn(r'\n    // --- Diagnostics and render state ---\n.*?\n    function createRenderState', '\n    // --- Render state ---\n    function createRenderState', source, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("Logging source function block not found")
+          for line in (
+              '        logEvent("DATAFREE")\n',
+              '        logEvent("RESULT " + outcome);\n',
+              '        logEvent("AUDIOFREE");\n',
+              '        logEvent("REMATCH");\n',
+              '        gameNumber++;\n',
+              '        logEvent("AUDIOACTIVE");\n',
+              '        logEvent("READY")\n',
+              '        logEvent("AUDIOCORE");\n',
+          ):
+              source = source.replace(line, "")
+          Path("CARAVAN_GAME.JS").write_text(source)
+
+          runtime = Path("assets/CARAVAN_GAME.MIN.JS").read_text()
+          for before, after in (
+              (',renderState=0,gameNumber=0;', ',renderState=0;'),
+              ('function lg(e){try{if(Pip.log){let m=process.memory();Pip.log("CV G"+gameNumber+" "+e+" F"+m.free+" T"+m.total,"CARAVAN.LOG")}}catch(error){}}', ''),
+              (';lg("DATAFREE")', ''),
+              (';lg("RESULT "+r)', ''),
+              (';lg("AUDIOFREE")', ''),
+              (';lg("REMATCH")', ''),
+              (';gameNumber++', ''),
+              (';lg("AUDIOACTIVE")', ''),
+              (';lg("READY")', ''),
+              (';lg("AUDIOCORE")', ''),
+          ):
+              runtime = runtime.replace(before, after)
+          Path("assets/CARAVAN_GAME.MIN.JS").write_text(runtime)
+
+          files = {
+              "README.md": "IyBDYXJhdmFuIHYxLjAuMCAtIFJlc2lkZW50IFJ1bnRpbWUgVGVzdCAyQQoKTWVtb3J5LXN0YWJpbGl0eSB0ZXN0IGZvciB0aGUgV2FuZCBDb21wYW55IFBpcC1Cb3kgMzAwMCAoZmlybXdhcmUgMS4xLjYpLgoKIyMgV2hhdCBjaGFuZ2VkCgotIEVuZ2luZSBsb2FkcyBvbmNlIHBlciBDYXJhdmFuIHBsYXkgc2Vzc2lvbi4KLSBSZW5kZXJlciBsb2FkcyBvbmNlIHBlciBDYXJhdmFuIHBsYXkgc2Vzc2lvbi4KLSBHYW1lIEF1ZGlvIGxvYWRzIG9uY2UgcGVyIENhcmF2YW4gcGxheSBzZXNzaW9uLgotIEF0IFJlc3VsdHMsIG9ubHkgdGhlIGN1cnJlbnQgbWF0Y2ggZGF0YSAoZGVja3MsIGhhbmRzLCBjYXJhdmFucywgZGlyZWN0aW9ucykgaXMgcmVsZWFzZWQuCi0gUmVtYXRjaCByZWJ1aWxkcyBtYXRjaCBkYXRhIHVzaW5nIHRoZSBhbHJlYWR5LWxvYWRlZCBFbmdpbmUvUmVuZGVyZXIvQXVkaW8gbW9kdWxlcy4KLSBObyBSZW5kZXJlciBvciBHYW1lIEF1ZGlvIGV2YWwvbG9hZCBoYXBwZW5zIG9uIFJlbWF0Y2guCi0gUGxheS9EaXNjYXJkIHVzZSB0aGUgcHJldmlvdXNseSB0ZXN0ZWQgc2hvcnQgV0FWIHBsYXliYWNrIHdpdGggZXhwbGljaXQgc3RvcC91bmxvYWQgdGltZXJzLgotIGBTT0xEYCBub3cgcmVxdWlyZXMgYWN0dWFsbHkgYmVhdGluZyB0aGUgb3Bwb3NpbmcgY2FyYXZhbjsgZXF1YWwgdG90YWxzIHN1Y2ggYXMgMjYgdnMgMjYgcmVtYWluIHRpZWQuCi0gUmVhbCBtYXRjaGVzIG5vdyByYW5kb21pemUgYW1vbmcgdGhlIDE0IEZhbGxvdXQ6IE5ldyBWZWdhcyBDYXJhdmFuIHBsYXllcnMuCi0gUmVzdWx0cyBvZmZlcnMgYFJlbWF0Y2hgLCBgQ2hhbGxlbmdlIE5ldyBPcHBvbmVudGAsIGFuZCBgQmFja2A7IFJlbWF0Y2gga2VlcHMgdGhlIHNhbWUgb3Bwb25lbnQgd2hpbGUgQ2hhbGxlbmdlIE5ldyBPcHBvbmVudCBwZXJmb3JtcyBhbiBpbi1wbGFjZSByZXNpZGVudCBtYXRjaCByZXNldCB3aXRoIGEgZGlmZmVyZW50IG9wcG9uZW50LgoKTXVzaWMgYXNzZXQ6ICJMYXp5IERheSAtIFRpcmVkIiAoMTYga0h6IG1vbm8gSU1BIEFEUENNLCAxMDI0LWJ5dGUgYmxvY2tzKS4K",
+              "metadata.json": "ewogICJpZCI6ICJjYXJhdmFuIiwKICAibmFtZSI6ICJDYXJhdmFuIiwKICAiYXV0aG9yIjogIkBMbGFtYVllWWUiLAogICJ2ZXJzaW9uIjogIjEuMC4wIiwKICAiZGVzY3JpcHRpb24iOiAiQ2FyYXZhbiByZXNpZGVudC1ydW50aW1lIGJ1aWxkOiBFbmdpbmUsIFJlbmRlcmVyLCBhbmQgR2FtZSBBdWRpbyBzdGF5IGxvYWRlZCBhY3Jvc3MgcmVtYXRjaGVzIHdoaWxlIG9ubHkgbWF0Y2ggZGF0YSBpcyByZWJ1aWx0LiIsCiAgInByZXZpZXdzIjogW10sCiAgInR5cGUiOiAiZ2FtZSIsCiAgInJlYWRtZSI6ICJSRUFETUUubWQiLAogICJzdG9yYWdlIjogWwogICAgewogICAgICAibmFtZSI6ICJBUFBJTkZPL0NBUkFWQU4uaW5mbyIsCiAgICAgICJ1cmwiOiAiQVBQSU5GTy9DQVJBVkFOLmluZm8iCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQVBQLkpTIiwKICAgICAgInVybCI6ICJhcHAubWluLmpzIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fTUVOVV9JTlRFUkZBQ0UuTUlOLkpTIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9NRU5VX0lOVEVSRkFDRS5NSU4uSlMiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTl9WT0xVTUVfQVBQTFkuTUlOLkpTIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9WT0xVTUVfQVBQTFkuTUlOLkpTIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fVk9MVU1FLkJJTiIsCiAgICAgICJ1cmwiOiAiYXNzZXRzL0NBUkFWQU5fVk9MVU1FLkJJTiIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9DQVJBVkFOX1NGWF9FTkdJTkUuTUlOLkpTIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9TRlhfRU5HSU5FLk1JTi5KUyIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9DQVJBVkFOX1NGWC5CSU4iLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX1NGWC5CSU4iCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTl9TRlguSURYIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9TRlguSURYIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fR0FNRS5NSU4uSlMiLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX0dBTUUuTUlOLkpTIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fR0FNRV9BVURJTy5NSU4uSlMiLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX0dBTUVfQVVESU8uTUlOLkpTIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fR0FNRV9FTkdJTkUuTUlOLkpTIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9HQU1FX0VOR0lORS5NSU4uSlMiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTl9EUkFXX1NDUkVFTi5NSU4uSlMiLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX0RSQVdfU0NSRUVOLk1JTi5KUyIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9DQVJBVkFOX1ZPTFVNRV9TT1VORC5NSU4uSlMiLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX1ZPTFVNRV9TT1VORC5NSU4uSlMiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTl9WT0xVTUVfUFJFVklFVy5NSU4uSlMiLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX1ZPTFVNRV9QUkVWSUVXLk1JTi5KUyIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9WT0xVTUVfU09VTkQuQ0ZHIiwKICAgICAgInVybCI6ICJhc3NldHMvVk9MVU1FX1NPVU5ELkNGRyIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9MQVpZX0RBWVotVElSRUQuV0FWIiwKICAgICAgInVybCI6ICJhc3NldHMvTEFaWV9EQVlaLVRJUkVELldBViIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9MQVpZX0RBWVMtVElSRURfUFJFVklFVy5XQVYiLAogICAgICAidXJsIjogImFzc2V0cy9MQVpZX0RBWVMtVElSRURfUFJFVklFVy5XQVYiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTl9HUkFQSElDUy5CSU4iLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOX0dSQVBISUNTLkJJTiIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkhPTE8vQ0FSQVZBTi9DQVJBVkFOX1RVVE9SSUFMLk1JTi5KUyIsCiAgICAgICJ1cmwiOiAiYXNzZXRzL0NBUkFWQU5fVFVUT1JJQUwuTUlOLkpTIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiSE9MTy9DQVJBVkFOL0NBUkFWQU5fUkVTVUxUX01FTlUuTUlOLkpTIiwKICAgICAgInVybCI6ICJhc3NldHMvQ0FSQVZBTl9SRVNVTFRfTUVOVS5NSU4uSlMiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQk9UVExFX0NBUF9SRVNVTFQxLldBViIsCiAgICAgICJ1cmwiOiAiYXNzZXRzL0JPVFRMRV9DQVBfUkVTVUxUMS5XQVYiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQk9UVExFX0NBUF9SRVNVTFQyLldBViIsCiAgICAgICJ1cmwiOiAiYXNzZXRzL0JPVFRMRV9DQVBfUkVTVUxUMi5XQVYiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQk9UVExFX0NBUF9SRVNVTFQzLldBViIsCiAgICAgICJ1cmwiOiAiYXNzZXRzL0JPVFRMRV9DQVBfUkVTVUxUMy5XQVYiCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJIT0xPL0NBUkFWQU4vQ0FSQVZBTi5JTUciLAogICAgICAidXJsIjogImFzc2V0cy9DQVJBVkFOLklNRyIKICAgIH0KICBdLAogICJzdG9yYWdlT3B0aW9uYWwiOiBbXSwKICAiaWNvbiI6ICJhc3NldHMvQ0FSQVZBTi5JTUciCn0K",
+              "LOGGING_SYSTEM_DEV_ONLY/DO_NOT_INCLUDE_IN_PR.txt": "Q0FSQVZBTiBERVZFTE9QRVIgTE9HR0lORyBTWVNURU0gLSBETyBOT1QgSU5DTFVERSBJTiBQVUJMSUMgUFIgLyBSRUxFQVNFCgpJTVBPUlRBTlQ6ClRoaXMgZW50aXJlIExPR0dJTkdfU1lTVEVNX0RFVl9PTkxZIGZvbGRlciBpcyBkZXZlbG9wZXIvZGVidWcgbWF0ZXJpYWwgb25seS4KRE8gTk9UIGNvcHksIHVwbG9hZCwgY29tbWl0LCBwYWNrYWdlLCBvciBhZGQgdGhpcyBmb2xkZXIgd2hlbiBjcmVhdGluZywgdXBkYXRpbmcsIHJlcGxhY2luZywgb3IgcmVwb3N0aW5nIHRoZSBwdWJsaWMgQ2FyYXZhbiBwdWxsIHJlcXVlc3QgaW4gQ29keVRvbGVuZS9waXAtYm95LTMwMDAtaG9sb3RhcGVzLgoKVGhlIG5vcm1hbCBDYXJhdmFuIGZpbGVzIG91dHNpZGUgdGhpcyBmb2xkZXIgaGF2ZSB0aGUgbGlmZWN5Y2xlIGxvZ2dlciByZW1vdmVkLgoKVG8gdGVtcG9yYXJpbHkgcmVzdG9yZSBkaWFnbm9zdGljcyBmb3IgaGFyZHdhcmUgYnVnIHRlc3Rpbmc6CjEuIEJhY2sgdXAgdGhlIGN1cnJlbnQgYWN0aXZlIGZpbGVzLgoyLiBDb3B5IENBUkFWQU5fR0FNRV9MT0dHSU5HLkpTIHRvIHRoZSBwcm9qZWN0IHJvb3QgYXMgQ0FSQVZBTl9HQU1FLkpTLgozLiBDb3B5IENBUkFWQU5fR0FNRV9MT0dHSU5HLk1JTi5KUyB0byBhc3NldHMvQ0FSQVZBTl9HQU1FLk1JTi5KUy4KNC4gVGVzdCBvbiBoYXJkd2FyZS4gVGhlIGxvZ2dpbmcgYnVpbGQgd3JpdGVzIENBUkFWQU4uTE9HIHVzaW5nIFBpcC5sb2coKS4KNS4gV2hlbiBkZWJ1Z2dpbmcgaXMgY29tcGxldGUsIHJlc3RvcmUgdGhlIG5vcm1hbCBuby1sb2cgQ0FSQVZBTl9HQU1FLkpTIGFuZCBhc3NldHMvQ0FSQVZBTl9HQU1FLk1JTi5KUyBiZWZvcmUgbWFraW5nIGFueSBwdWJsaWMgcGFja2FnZSBvciBQUi4KCkxvZ2dpbmcgbWFya2VycyBwcmVzZXJ2ZWQgaW4gdGhpcyBiYWNrdXAgaW5jbHVkZToKLSBSRUFEWQotIFJFU1VMVCA8b3V0Y29tZT4KLSBEQVRBRlJFRQotIFJFTUFUQ0gKLSBBVURJT0NPUkUKLSBBVURJT0FDVElWRQotIEFVRElPRlJFRQoKUFVCTElDIFJFTEVBU0UgUlVMRToKVGhlIHB1YmxpYyBDYXJhdmFuIHBhY2thZ2UvUFIgbXVzdCBjb250YWluIE5PIExPR0dJTkdfU1lTVEVNX0RFVl9PTkxZIGZvbGRlciBhbmQgbXVzdCB1c2UgdGhlIG5vLWxvZyBhY3RpdmUgZ2FtZSBmaWxlcy4K"
+          }
+          for path, encoded in files.items():
+              p = Path(path)
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_bytes(base64.b64decode(encoded))
+
+          expected = {
+              "LOGGING_SYSTEM_DEV_ONLY/CARAVAN_GAME_LOGGING.JS": "7ca8a7c05f2ae2bb2e868d209ca93cb5327a5f03",
+              "LOGGING_SYSTEM_DEV_ONLY/CARAVAN_GAME_LOGGING.MIN.JS": "653b7115754e2bb54d84884d928b0955d9041fa4",
+              "LOGGING_SYSTEM_DEV_ONLY/DO_NOT_INCLUDE_IN_PR.txt": "3024175e68fa5886f20601163245419a4db09024",
+              "CARAVAN_GAME.JS": "e4f85e631c672c15ab41950d966c42baa7ffc93f",
+              "assets/CARAVAN_GAME.MIN.JS": "0c0498b09b62578d67393daa8697c910f57b0724",
+              "README.md": "8a5cda7cc3be79d241aa7c42302d778bf8930981",
+              "metadata.json": "5e87b898cd11e67816b2a1f7ea08d70be3ab27ff"
+          }
+          bad = [(p, blob_sha(p), sha) for p, sha in expected.items() if blob_sha(p) != sha]
+          if bad:
+              raise SystemExit("Package hash verification failed: " + repr(bad))
+          print("Target package hashes verified")
+          PY
+
+          rm -f .github/workflows/replace-caravan-main.yml .github/workflows/replace-caravan-main-v2.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Replace main with Caravan v1.0.0 package"
+          git push origin HEAD:main
