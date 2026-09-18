@@ -1,113 +1,112 @@
 # Caravan v1.0.0
 
-A playable recreation of **Caravan from Fallout: New Vegas** for **The Wand Company Pip-Boy 3000**, built specifically for firmware **1.1.6** and its memory-constrained Espruino runtime.
+A playable recreation of **Caravan from Fallout: New Vegas** for **The Wand Company Pip-Boy 3000**, built for firmware **1.1.6** and designed around the device's limited Espruino memory.
 
 ## Features
 
-* Player-vs-CPU Caravan gameplay.
-* Randomized 54-card decks.
-* Number cards, Aces, Jacks, Queens, Kings, and Jokers.
-* Three caravans per player.
-* Betting and ante selection.
-* Ascending and descending caravan rules.
-* Same-suit override behavior.
-* 21–26 selling range.
-* Correct tie handling.
-* Two-of-three caravan win detection.
-* Randomized Fallout: New Vegas opponents.
-* Guided Demo / Tutorial.
-* Rematches.
-* Challenge New Opponent.
-* Animated bottle-cap win/loss results.
-* Configurable game sound effects and background music.
-* Persistent audio volume settings.
-
-## Resident Runtime Architecture
-
-Caravan uses a low-memory resident-runtime design intended to improve stability across consecutive matches.
-
-The following systems load once for the current Caravan play session:
-
-* Game Engine
-* Renderer
-* Game Audio
-
-When a match ends, only match-specific data is released, including:
-
-* Decks
-* Hands
-* Caravan cards
-* Direction state
-* Current match state
-
-Selecting **Rematch** rebuilds only the match data while keeping the Engine, Renderer, and Game Audio resident.
-
-This avoids repeatedly evaluating and loading the largest gameplay modules between matches.
+- Player-vs-CPU Caravan gameplay
+- Randomized 54-card decks
+- Number cards, Aces, Jacks, Queens, Kings, and Jokers
+- Three caravans per player
+- Ascending and descending caravan rules
+- Same-suit override behavior
+- 21–26 selling range
+- Proper tie handling
+- Two-of-three caravan win detection
+- Disband Caravan support
+- Opening discard/redraw support
+- 14 randomized Fallout: New Vegas Caravan opponents
+- Demo / Tutorial mode
+- Rematch support
+- Challenge New Opponent
+- Player and opponent bottle-cap bankrolls
+- Betting limited by available bottle caps
+- Bottle-cap reset flow when funds run out
+- Animated win/loss result screen
+- Configurable sound effects and background music
+- Persistent volume settings
 
 ## Opponents
 
-Real matches randomly select from 14 Fallout: New Vegas Caravan players:
+Caravan randomly selects from 14 Fallout: New Vegas Caravan players:
 
-* Cliff Briscoe
-* Dale Barton
-* Ambassador Dennis Crocker
-* Isaac
-* Private Jake Erwin
-* Johnson Nash
-* Jules
-* Keith
-* Lacey
-* Little Buster
-* Quartermaster Mayes
-* No-bark Noonan
-* Ringo
-* Jed Masterson
+- Cliff Briscoe
+- Dale Barton
+- Ambassador Dennis Crocker
+- Isaac
+- Private Jake Erwin
+- Johnson Nash
+- Jules
+- Keith
+- Lacey
+- Little Buster
+- Quartermaster Mayes
+- No-bark Noonan
+- Ringo
+- Jed Masterson
 
 **Rematch** keeps the current opponent.
 
-**Challenge New Opponent** performs an in-place match reset and selects a different opponent.
+**Challenge New Opponent** selects a different opponent without requiring the entire game to be reloaded.
 
-## Gameplay Rules
+## Gameplay
 
-Caravan supports number cards and the major face-card mechanics from Fallout: New Vegas.
+Caravan includes the major card mechanics from Fallout: New Vegas:
 
-### Jack
+- **Jack** removes a targeted numbered card and its attached face cards.
+- **Queen** reverses caravan direction and changes its effective suit.
+- **King** doubles the value of the targeted numbered card.
+- **Joker** removes matching ranks or suits depending on the targeted card.
 
-Removes the targeted numeric card and its attached face cards.
-
-### Queen
-
-Reverses the caravan's current direction and changes its effective suit.
-
-### King
-
-Doubles the value of the targeted numeric card. Additional Kings multiply the value again.
-
-### Joker
-
-When played on an Ace, removes other numeric cards of that Ace's suit from both boards.
-
-When played on a 2–10, removes other numeric cards of that rank from both boards.
-
-### SOLD / Ties
-
-A caravan must be within the valid selling range and actually beat the opposing caravan to count as **SOLD**.
+A caravan must total **21–26** and beat the opposing caravan to count as **SOLD**.
 
 Equal totals remain tied.
+
+## Bottle Caps
+
+The player and opponent both maintain their own bottle-cap totals.
+
+Winning and losing updates each bankroll based on the current wager, and bets cannot exceed the available funds of either side.
+
+If the player runs out of caps, Caravan provides a reset flow that restores both bankrolls so another game can be started.
+
+## Low-Memory Runtime
+
+Caravan is split into multiple runtime modules so the Pip-Boy does not need to keep the entire game loaded at once.
+
+The game uses cleanup, garbage collection, and defragmentation around heavier menu, gameplay, and result transitions to reduce memory pressure.
+
+The result screen also uses a dedicated compact graphics bank:
+
+`CARAVAN_RESULT_CAPS.BIN`
+
+This allows the bottle-cap result artwork to be displayed without loading the larger graphics bank during an already memory-heavy transition.
 
 ## Audio
 
 Caravan includes:
 
-* Playing Card sound - Sound Effect by Alex from Pixabay
-* Discard sound - Sound Effect by Alex from Pixabay
-* Bottle Cap result audio - Sound already in the Pip-Boy 3000
-* Background music
+- Playing Card sound
+- Discard sound
+- Bottle Cap result audio
+- Background music
+- Separate sound-effect and music volume settings
+- Persistent audio configuration
 
 Music:
 
-* Lazy Day - Tired - Music by Geoff Harvey from Pixabay
+**Lazy Day - Tired** — Geoff Harvey from Pixabay
 
-## THANKYOU
+Playing Card and Discard sounds:
 
-Holotape Image by Goji! He put work into the art cover thumbnail for the Caravan Game and it's awesome!
+**Alex from Pixabay**
+
+Bottle Cap result audio:
+
+**The Wand Company Pip-Boy 3000**
+
+## Thank You
+
+Holotape artwork by **Goji!**
+
+He put work into the Caravan cover artwork and it turned out awesome.
